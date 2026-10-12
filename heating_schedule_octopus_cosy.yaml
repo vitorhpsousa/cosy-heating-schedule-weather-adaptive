@@ -1,0 +1,99 @@
+alias: Heating Schedule (Octopus Cosy)
+description: ""
+mode: single
+triggers:
+  - trigger: time
+    at: "00:00:00"
+    id: "off"
+  - trigger: time
+    at: "07:00:00"
+    id: "off"
+  - trigger: time
+    at: "16:00:00"
+    id: "off"
+  - trigger: time
+    at: "04:00:00"
+    id: normal_04
+  - trigger: time
+    at: "13:00:00"
+    id: boost_13
+  - trigger: time
+    at: "22:00:00"
+    id: boost_22
+conditions: []
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id:
+              - "off"
+        sequence:
+          - action: climate.set_hvac_mode
+            target:
+              entity_id: climate.hive
+            data:
+              hvac_mode: "off"
+      - conditions:
+          - condition: trigger
+            id:
+              - normal_04
+        sequence:
+          - action: climate.set_hvac_mode
+            target:
+              entity_id: climate.hive
+            data:
+              hvac_mode: heat
+          - action: climate.set_temperature
+            target:
+              entity_id: climate.hive
+            data:
+              temperature: 24
+      - conditions:
+          - condition: trigger
+            id:
+              - boost_13
+        sequence:
+          - action: hive.boost_heating_on
+            target:
+              entity_id: climate.hive
+            data:
+              time_period: "03:00:00"
+              temperature: 27
+      - conditions:
+          - condition: trigger
+            id:
+              - boost_22
+        sequence:
+          - action: weather.get_forecasts
+            target:
+              entity_id: weather.forecast_home
+            data:
+              type: hourly
+            response_variable: forecast
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >-
+                      {% set entries = forecast['weather.forecast_home'].forecast %}
+                      {% set cutoff = now() + timedelta(hours=6) %}
+                      {% set ns = namespace(temps=[]) %}
+                      {% for e in entries %}{% if (e.datetime | as_datetime) < cutoff %}{% set ns.temps = ns.temps + [e.temperature] %}{% endif %}{% endfor %}
+                      {{ (ns.temps | min) < 5 if ns.temps else false }}
+                sequence:
+                  - action: hive.boost_heating_on
+                    target:
+                      entity_id: climate.hive
+                    data:
+                      time_period: "02:00:00"
+                      temperature: 29
+            default:
+              - action: climate.set_hvac_mode
+                target:
+                  entity_id: climate.hive
+                data:
+                  hvac_mode: heat
+              - action: climate.set_temperature
+                target:
+                  entity_id: climate.hive
+                data:
+                  temperature: 24
